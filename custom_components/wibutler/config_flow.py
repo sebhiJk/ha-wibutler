@@ -4,7 +4,7 @@ import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import callback
-from .const import DOMAIN, CONF_HOST, CONF_PORT, CONF_PASSWORD, CONF_USERNAME
+from .const import DOMAIN, CONF_HOST, CONF_PORT, CONF_PASSWORD, CONF_USERNAME, CONF_VERIFY_SSL, CONF_USE_SSL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -14,7 +14,9 @@ DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=8081): int,
         vol.Required(CONF_USERNAME): str,
-        vol.Required(CONF_PASSWORD): str
+        vol.Required(CONF_PASSWORD): str,
+        vol.Required(CONF_VERIFY_SSL, default=False): bool,
+        vol.Required(CONF_USE_SSL, default=False): bool,
     }
 )
 
@@ -65,6 +67,8 @@ class WibutlerOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(CONF_PORT, default=current_options.get(CONF_PORT, 8081)): int,
                 vol.Required(CONF_PASSWORD, default=current_options.get(CONF_PASSWORD, "")): str,
                 vol.Required(CONF_USERNAME, default=current_options.get(CONF_USERNAME, "")): str,
+                vol.Required(CONF_VERIFY_SSL, default=current_options.get(CONF_VERIFY_SSL, False)): bool,
+                vol.Required(CONF_USE_SSL, default=current_options.get(CONF_USE_SSL, False)): bool,
             }
         )
 
