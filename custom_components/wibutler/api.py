@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 from typing import Any, Dict, Optional, List, Callable
+from urllib.parse import urlparse
 
 from homeassistant.core import HomeAssistant
 
@@ -11,11 +12,13 @@ _LOGGER = logging.getLogger(__name__)
 class WibutlerHub:
     """Verwaltet die Kommunikation mit der Wibutler API, inklusive WebSockets."""
 
-    def __init__(self, hass: HomeAssistant, host: str, port: int, username: str, password: str):
+    def __init__(self, hass: HomeAssistant, host: str, port: int, username: str, password: str, verify_ssl: bool = False, use_ssl: bool = False):
         """Initialisiere Wibutler API-Verbindung."""
         self.hass = hass
         self.host = host
         self.port = port
+        self.verify_ssl = verify_ssl
+        self.use_ssl = use_ssl
         self.username = username
         self.password = password
         self.session = aiohttp.ClientSession()
@@ -23,9 +26,27 @@ class WibutlerHub:
         self.ws_task: Optional[asyncio.Task] = None
         self.listeners: List[Callable[[str, Any], None]] = []
 
+        if self.use_ssl:
+            self.schema = "https"
+        else:
+            self.schema = "http"
+
+        # check if host has a scheme, if so set the baseUrl to the host without the scheme
+        if urlparse(self.host).scheme:
+            self.baseUrl = urlparse(self.host).hostname
+        else:
+            self.baseUrl = self.host
+
+        if self.verify_ssl is False:
+            _LOGGER.debug("🔓 SSL-Überprüfung ist deaktiviert (verify_ssl=False).")
+            connector = aiohttp.TCPConnector(ssl=False)  # Deaktiviere SSL-Überprüfung
+        else:
+            _LOGGER.debug("🔒 SSL-Überprüfung ist aktiviert (verify_ssl=True).")
+            connector = aiohttp.TCPConnector(ssl=True)  # Aktiviere SSL-Überprüfung
+
     async def authenticate(self) -> bool:
         """Authentifiziert sich bei der Wibutler API und speichert das Token."""
-        url = f"http://{self.host}:{self.port}/api/login"
+        url = f"{self.schema}://{self.baseUrl}:{self.port}/api/login"
         payload = {"username": self.username, "password": self.password}
 
         try:
@@ -51,7 +72,7 @@ class WibutlerHub:
             if not await self.authenticate():
                 return None
 
-        url = f"http://{self.host}:{self.port}/api/{endpoint}"
+        url = f"{self.schema}://{self.baseUrl}:{self.port}/api/{endpoint}"
         headers = {"Authorization": f"Bearer {self.token}"}
 
         try:
@@ -82,7 +103,8 @@ class WibutlerHub:
             _LOGGER.error("❌ Kein gültiges Token, kann WebSocket nicht starten.")
             return
 
-        ws_url = f"ws://{self.host}:{self.port}/api/stream/{self.token}"
+        ws_protocol = "wss" if self.schema == "https" else "ws"
+        ws_url = f"{ws_protocol}://{self.host}:{self.port}/api/stream/{self.token}"
         _LOGGER.info("🔌 Verbindung zu WebSocket: %s", ws_url)
 
         try:

@@ -24,7 +24,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data["host"],
         entry.data.get("port", 8081),
         entry.data["username"],
-        entry.data["password"]
+        entry.data["password"],
+        entry.data.get("verify_ssl", False),
+        entry.data.get("use_ssl", False),
     )
 
     if not await hub.authenticate():
