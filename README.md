@@ -34,7 +34,7 @@ This is a custom component for integrating **Wibutler** devices into **Home Assi
 1. In Home Assistant, go to **Settings → Devices & Services**.
 2. Click **Add Integration** and search for **Wibutler**.
 3. Enter your **Wibutler hub’s IP address** and authentication details.
-4. Standard ports for wibutler2 are 8081 for HTTPS or 8091 for HTTP
+4. Standard ports for wibutler2 are **8081** for **HTTPS** or **8091** for **HTTP**
 5. Click **Submit**.
 
 ## 🏠 Available Entities
