@@ -69,9 +69,9 @@ class WibutlerLight(LightEntity):
             return
 
         # SWT → ON
-        data_swt = {"value": "ON", "type": "switch"}
-        url_swt = f"devices/{self._device_id}/components/SWT"
-        resp_swt = await self._hub._request("PATCH", url_swt, data_swt)
+        # data_swt = {"value": "ON", "type": "switch"}
+        # url_swt = f"devices/{self._device_id}/components/SWT"
+        # resp_swt = await self._hub._request("PATCH", url_swt, data_swt)
 
         # BRI_LVL → Prozent mit type "numeric"
         data_bri = {"type": "numeric", "value": str(brightness_pct)}
