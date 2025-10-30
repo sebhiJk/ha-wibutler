@@ -77,6 +77,7 @@ class WibutlerLight(LightEntity):
         data_bri = {"type": "numeric", "value": str(brightness_pct)}
         url_bri = f"devices/{self._device_id}/components/BRI_LVL"
         resp_bri = await self._hub._request("PATCH", url_bri, data_bri)
+        resp_swt = resp_bri
 
         # if resp_swt and resp_bri:
         if resp_bri:
