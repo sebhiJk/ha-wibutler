@@ -78,7 +78,8 @@ class WibutlerLight(LightEntity):
         url_bri = f"devices/{self._device_id}/components/BRI_LVL"
         resp_bri = await self._hub._request("PATCH", url_bri, data_bri)
 
-        if resp_swt and resp_bri:
+        # if resp_swt and resp_bri:
+        if resp_bri:
             self._is_on = True
             self._brightness_pct = brightness_pct
             self._last_brightness_pct = brightness_pct
