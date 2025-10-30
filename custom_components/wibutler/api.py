@@ -48,7 +48,7 @@ class WibutlerHub:
         """Authentifiziert sich bei der Wibutler API und speichert das Token."""
         url = f"{self.schema}://{self.baseUrl}:{self.port}/api/login"
         payload = {"username": self.username, "password": self.password}
-
+        _LOGGER.info("✅ Start authenticate")
         try:
             async with self.session.post(url, json=payload) as response:
                 if response.status == 200:
@@ -57,7 +57,7 @@ class WibutlerHub:
                     if not self.token:
                         _LOGGER.error("❌ API-Antwort enthält kein Token")
                         return False
-                    _LOGGER.info("✅ Erfolgreich authentifiziert!")
+                    _LOGGER.info("✅ Erfolgreich authentifiziert! %s", self.token)
                     return True
                 else:
                     _LOGGER.error("❌ Authentifizierung fehlgeschlagen: %s", await response.text())
@@ -74,7 +74,9 @@ class WibutlerHub:
 
         url = f"{self.schema}://{self.baseUrl}:{self.port}/api/{endpoint}"
         headers = {"Authorization": f"Bearer {self.token}"}
-
+        _LOGGER.info("✅ Start request")
+        _LOGGER.info("✅ url:  %s", url)
+        _LOGGER.info("✅ headers:  %s", headers)
         try:
             async with self.session.request(method, url, headers=headers, json=data) as response:
                 if response.status in (200, 201):
@@ -91,6 +93,7 @@ class WibutlerHub:
 
     async def get_devices(self) -> Optional[Dict[str, Any]]:
         """Holt die Liste der Geräte von der Wibutler API und gibt ein Dictionary zurück."""
+        _LOGGER.info("✅ Start get_devices")
         response = await self._request("GET", "devices")
         if isinstance(response, dict):
             return response.get("devices", {})
