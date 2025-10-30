@@ -1,8 +1,7 @@
 fimport logging
 from homeassistant.components.light import (
     LightEntity,
-    ATTR_BRIGHTNESS,
-    supported_color_modes
+    ATTR_BRIGHTNESS
 )
 from .const import DOMAIN
 
@@ -38,11 +37,12 @@ class WibutlerLight(LightEntity):
         self._brightness_pct = 0
         self._last_brightness_pct = 100
         self._fetch_state(device.get("components", []))
+        self.supported_color_modes = ["brightness"]
 
     # --- Eigenschaften ---
-    @property
-    def supported_features(self):
-        return (supported_color_modes = ["brightness"])
+    # @property
+    # def supported_features(self):
+    #    return (supported_color_modes = ["brightness"])
 
     @property
     def is_on(self):
