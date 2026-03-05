@@ -1,14 +1,27 @@
+"""Sensor platform for Wibutler integration."""
+
 import logging
+
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.device_registry import DeviceInfo
-from .const import DOMAIN
+from homeassistant.const import PERCENTAGE, UnitOfTemperature
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from . import WibutlerConfigEntry
+from .entity import WibutlerEntity
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_entry(hass, entry, async_add_entities):
+PARALLEL_UPDATES = 0
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: WibutlerConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up Wibutler sensors from a config entry."""
-    hub = hass.data[DOMAIN]["hub"]
+    hub = entry.runtime_data
     devices = hub.devices
 
     sensors = []
@@ -16,56 +29,64 @@ async def async_setup_entry(hass, entry, async_add_entities):
         if device.get("type") not in ["FloorHeatingController"]:
             continue
 
-        # Extrahiere alle "name"-Werte aus outputs
         outputs = {output["name"] for output in device.get("outputs", [])}
 
         for component in device.get("components", []):
-            if component.get("readonly") == True and component.get("name") in outputs:  # Nur wenn Name in outputs existiert
+            if component.get("readonly") is True and component.get("name") in outputs:
                 sensors.append(WibutlerSensor(hub, device, component))
 
     async_add_entities(sensors, True)
 
-class WibutlerSensor(SensorEntity):
-    def __init__(self, hub, device, component):
-        """Initialize the sensor."""
-        from homeassistant.const import PERCENTAGE
-        from homeassistant.util.unit_system import UnitOfTemperature
 
-        self._hub = hub
-        self._device = device
+class WibutlerSensor(WibutlerEntity, SensorEntity):
+    """Representation of a Wibutler sensor."""
+
+    def __init__(self, hub, device, component) -> None:
+        """Initialize the sensor."""
+        super().__init__(hub, device)
         self._component = component
-        self._device_id = device['id']
-        self._component_name = component['name']
-        self._state = component['value']
+        self._component_name = component["name"]
         self._attr_name = f"{device['name']} - {component['text']}"
         self._attr_unique_id = f"{device['id']}_{component['name']}"
-        self._attr_native_value = component.get("value")
 
-        # Einheit bestimmen
-        if "temperature" in component.get("text", "").lower():
+        text_lower = component.get("text", "").lower()
+        raw_value = component.get("value")
+
+        if "temperature" in text_lower:
             self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-            raw_value = component.get("value")
-            self._attr_native_value = int(self._attr_native_value) / 100
-        elif "switch-on time" in component.get("text", "").lower():
+            try:
+                self._attr_native_value = int(raw_value) / 100
+            except (TypeError, ValueError):
+                self._attr_native_value = None
+        elif "switch-on time" in text_lower:
             self._attr_native_unit_of_measurement = PERCENTAGE
-            self._attr_native_value = int(self._attr_native_value)
-        elif "humidity" in component.get("text", "").lower():
+            try:
+                self._attr_native_value = int(raw_value)
+            except (TypeError, ValueError):
+                self._attr_native_value = None
+        elif "humidity" in text_lower:
             self._attr_native_unit_of_measurement = PERCENTAGE
+            self._attr_native_value = raw_value
         else:
-            self._attr_native_unit_of_measurement = None  # Keine spezifische Einheit
+            self._attr_native_unit_of_measurement = None
+            self._attr_native_value = raw_value
 
-    def _fetch_state(self, components):
-        """Holt den neuen Zustand aus WebSocket-Daten und setzt den Status korrekt."""
+    def _fetch_state(self, components) -> None:
+        """Update state from device data."""
         for component in components:
             if component.get("name") == self._component_name:
-                self._state = component.get("value")
-                self._attr_native_value = component.get("value")
+                raw_value = component.get("value")
+                text_lower = self._component.get("text", "").lower()
 
-    async def async_added_to_hass(self):
-        """Register for WebSocket updates."""
-        self._hub.register_listener(self)
-
-    def handle_ws_update(self, device_id, components):
-        """Process WebSocket update."""
-        self._fetch_state(components)
-        self.async_write_ha_state()
+                if "temperature" in text_lower:
+                    try:
+                        self._attr_native_value = int(raw_value) / 100
+                    except (TypeError, ValueError):
+                        self._attr_native_value = None
+                elif "switch-on time" in text_lower:
+                    try:
+                        self._attr_native_value = int(raw_value)
+                    except (TypeError, ValueError):
+                        self._attr_native_value = None
+                else:
+                    self._attr_native_value = raw_value
