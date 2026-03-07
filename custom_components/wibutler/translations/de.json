@@ -1,0 +1,61 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Wibutler Hub",
+                "data": {
+                    "host": "Host",
+                    "port": "Port",
+                    "username": "Benutzername",
+                    "password": "Passwort",
+                    "verify_ssl": "SSL verifizieren",
+                    "use_ssl": "SSL verwenden"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Verbindung zum Wibutler Hub nicht möglich",
+            "invalid_auth": "Ungültige Anmeldedaten",
+            "unknown": "Unbekannter Fehler"
+        },
+        "abort": {
+            "already_configured": "Gerät ist bereits konfiguriert"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Wibutler Optionen",
+                "data": {
+                    "next_step": "Bereich"
+                }
+            },
+            "connection": {
+                "title": "Verbindungseinstellungen",
+                "data": {
+                    "host": "Host",
+                    "port": "Port",
+                    "username": "Benutzername",
+                    "password": "Passwort",
+                    "verify_ssl": "SSL verifizieren",
+                    "use_ssl": "SSL verwenden"
+                }
+            },
+            "rocker_menu": {
+                "title": "Wippen-Zuordnungen",
+                "data": {
+                    "dim_duration": "Dimm-Dauer (Sekunden, 0-100%)",
+                    "action": "Aktion auswählen"
+                }
+            },
+            "add_binding": {
+                "title": "Wippen-Zuordnung hinzufügen",
+                "data": {
+                    "device_button": "Taste",
+                    "target_entity_ids": "Ziel-Entitäten",
+                    "mode": "Modus"
+                }
+            }
+        }
+    }
+}
