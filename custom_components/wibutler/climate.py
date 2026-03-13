@@ -79,11 +79,8 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
         if "temperature" not in kwargs:
             return
 
-        # Skalierung abhängig vom Gerätetyp
-        if self._device.get("type") == "VOCsensors":
-            new_temp = int(kwargs["temperature"])
-        else:
-            new_temp = int((kwargs["temperature"] - 10) * 2)
+        # Einheitliche Skalierung für alle Wibutler-Climate-Geräte
+        new_temp = int((kwargs["temperature"] - 10) * 2)
             
         data = {"type": "numeric", "value": str(new_temp)}
         url = f"devices/{self._device_id}/components/TSP"
@@ -107,11 +104,8 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
                     pass
             elif name == "TSP":
                 try:
-                    # VOCsensors geben den Wert direkt aus (z.B. 26 für 26°C), Panels skaliert
-                    if self._device.get("type") == "VOCsensors":
-                        self._target_temperature = float(val)
-                    else:
-                        self._target_temperature = (int(val) / 2) + 10
+                    # Einheitliche Umrechnung für alle (auch VOCsensors)
+                    self._target_temperature = (int(val) / 2) + 10
                 except (TypeError, ValueError):
                     pass
             elif name == "HUM":
@@ -119,3 +113,4 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
                     self._current_humidity = int(val) / 100
                 except (TypeError, ValueError):
                     pass
+                    
