@@ -13,7 +13,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     climate_entities = []
     for device_id, device in devices.items():
-        if device.get("type") in ["RoomOperatingPanels"]:
+        # VOCsensors hinzugefügt
+        if device.get("type") in ["RoomOperatingPanels", "VOCsensors"]:
             climate_entities.append(WibutlerClimate(hub, device))
 
     async_add_entities(climate_entities, True)
@@ -34,6 +35,7 @@ class WibutlerClimate(ClimateEntity):
 
         self._current_temperature = None
         self._target_temperature = None
+        self._current_humidity = None # Neue Eigenschaft für Luftfeuchtigkeit
         self._fetch_state(device.get("components", []))
 
     @property
@@ -43,6 +45,11 @@ class WibutlerClimate(ClimateEntity):
     @property
     def target_temperature(self):
         return self._target_temperature
+        
+    @property
+    def current_humidity(self):
+        """Return the current humidity."""
+        return self._current_humidity
 
     @property
     def hvac_mode(self):
@@ -52,7 +59,7 @@ class WibutlerClimate(ClimateEntity):
     @property
     def icon(self):
         """Setzt ein passenderes Icon für das Gerät."""
-        return "mdi:radiator"  # Beispiel für Fußbodenheizung oder Heizkörper
+        return "mdi:radiator" 
 
     async def async_set_temperature(self, **kwargs):
         """Setzt die Zieltemperatur über die API mit korrekter Umrechnung."""
@@ -83,9 +90,14 @@ class WibutlerClimate(ClimateEntity):
         """Holt den neuen Zustand aus WebSocket-Daten und setzt den Status korrekt."""
         for component in components:
             if component.get("name") == "TMP":
-                self._current_temperature = int(component.get("value")) / 100  # TMP / 100
+                self._current_temperature = int(component.get("value")) / 100
+            elif component.get("name") == "RTMP":
+                # Überschreibe TMP mit RTMP falls vorhanden (oft genauer für Raumtemperatur)
+                self._current_temperature = int(component.get("value")) / 100
             elif component.get("name") == "TSP":
-                self._target_temperature = (int(component.get("value")) / 2) + 10  # Umrechnung rückgängig
+                self._target_temperature = (int(component.get("value")) / 2) + 10
+            elif component.get("name") == "HUM":
+                self._current_humidity = int(component.get("value")) / 100
 
     async def async_added_to_hass(self):
         """Register for WebSocket updates."""

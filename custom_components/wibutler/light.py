@@ -2,7 +2,7 @@ import logging
 from homeassistant.components.light import (
     LightEntity,
     ATTR_BRIGHTNESS,
-    SUPPORT_BRIGHTNESS,
+    ColorMode,
 )
 from .const import DOMAIN
 
@@ -18,7 +18,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
     lights = []
     for device_id, device in devices.items():
-        """Typo in the API"""
         if device.get("type") == "DimminActuators":
             lights.append(WibutlerLight(hub, device))
 
@@ -27,6 +26,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class WibutlerLight(LightEntity):
     """Representation of a Wibutler dimmable light."""
+
+    # Setze unterstützte Farbmodi (Behebt die Deprecation Warnings für 2025/2026)
+    _attr_color_mode = ColorMode.BRIGHTNESS
+    _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
     def __init__(self, hub, device):
         self._hub = hub
@@ -40,10 +43,6 @@ class WibutlerLight(LightEntity):
         self._fetch_state(device.get("components", []))
 
     # --- Eigenschaften ---
-    @property
-    def supported_features(self):
-        return SUPPORT_BRIGHTNESS
-
     @property
     def is_on(self):
         return self._is_on
@@ -68,18 +67,11 @@ class WibutlerLight(LightEntity):
             await self.async_turn_off()
             return
 
-        # SWT → ON
-        # data_swt = {"value": "ON", "type": "switch"}
-        # url_swt = f"devices/{self._device_id}/components/SWT"
-        # resp_swt = await self._hub._request("PATCH", url_swt, data_swt)
-
         # BRI_LVL → Prozent mit type "numeric"
         data_bri = {"type": "numeric", "value": str(brightness_pct)}
         url_bri = f"devices/{self._device_id}/components/BRI_LVL"
         resp_bri = await self._hub._request("PATCH", url_bri, data_bri)
-        resp_swt = resp_bri
 
-        # if resp_swt and resp_bri:
         if resp_bri:
             self._is_on = True
             self._brightness_pct = brightness_pct
