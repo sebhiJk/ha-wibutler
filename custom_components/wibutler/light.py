@@ -1,19 +1,32 @@
+"""Light platform for Wibutler integration."""
+
 import logging
+
 from homeassistant.components.light import (
-    LightEntity,
     ATTR_BRIGHTNESS,
     ColorMode,
+    LightEntity,
 )
-from .const import DOMAIN
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from . import WibutlerConfigEntry
+from .entity import WibutlerEntity
 
 _LOGGER = logging.getLogger(__name__)
 
-BRIGHTNESS_SCALE = 255 / 100  # Prozent ↔ HA-Skala
-MIN_PERCENT = 10              # alles < 10 % = AUS
+PARALLEL_UPDATES = 1
+BRIGHTNESS_SCALE = 255 / 100
+MIN_PERCENT = 10
 
-async def async_setup_entry(hass, entry, async_add_entities):
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: WibutlerConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up Wibutler dimmable lights from a config entry."""
-    hub = hass.data[DOMAIN]["hub"]
+    hub = entry.runtime_data
     devices = hub.devices
 
     lights = []
@@ -24,64 +37,64 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(lights, True)
 
 
-class WibutlerLight(LightEntity):
+class WibutlerLight(WibutlerEntity, LightEntity):
     """Representation of a Wibutler dimmable light."""
 
-    # Setze unterstützte Farbmodi (Behebt die Deprecation Warnings für 2025/2026)
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
-    def __init__(self, hub, device):
-        self._hub = hub
-        self._device = device
-        self._device_id = device["id"]
+    def __init__(self, hub, device) -> None:
+        """Initialize the light."""
+        super().__init__(hub, device)
         self._attr_name = device["name"]
-        self._attr_unique_id = f"{device['id']}_{device['name']}"
+        self._attr_unique_id = device["id"]
         self._is_on = False
         self._brightness_pct = 0
         self._last_brightness_pct = 100
         self._fetch_state(device.get("components", []))
 
-    # --- Eigenschaften ---
     @property
     def is_on(self):
+        """Return true if light is on."""
         return self._is_on
 
     @property
     def brightness(self):
+        """Return the brightness of the light."""
         if self._brightness_pct < MIN_PERCENT:
             return 0
         return int(self._brightness_pct * BRIGHTNESS_SCALE)
 
-    # --- Schalten ---
-    async def async_turn_on(self, **kwargs):
+    async def async_turn_on(self, **kwargs) -> None:
+        """Turn the light on."""
         brightness_pct = self._last_brightness_pct
 
         if ATTR_BRIGHTNESS in kwargs:
             brightness_ha = kwargs[ATTR_BRIGHTNESS]
-            brightness_pct = int(brightness_ha / BRIGHTNESS_SCALE)
-            brightness_pct = max(0, min(100, brightness_pct))
+            brightness_pct = max(
+                0, min(100, int(brightness_ha / BRIGHTNESS_SCALE))
+            )
 
-        # wenn kleiner als MIN_PERCENT → direkt ausschalten
         if brightness_pct < MIN_PERCENT:
             await self.async_turn_off()
             return
 
-        # BRI_LVL → Prozent mit type "numeric"
+        data_swt = {"value": "ON", "type": "switch"}
+        url_swt = f"devices/{self._device_id}/components/SWT"
+        resp_swt = await self._hub._request("PATCH", url_swt, data_swt)
+
         data_bri = {"type": "numeric", "value": str(brightness_pct)}
         url_bri = f"devices/{self._device_id}/components/BRI_LVL"
         resp_bri = await self._hub._request("PATCH", url_bri, data_bri)
 
-        if resp_bri:
+        if resp_swt and resp_bri:
             self._is_on = True
             self._brightness_pct = brightness_pct
             self._last_brightness_pct = brightness_pct
-            _LOGGER.info("💡 Light %s auf %d %% gesetzt", self._attr_name, brightness_pct)
             self.async_write_ha_state()
-        else:
-            _LOGGER.error("❌ Fehler beim Einschalten/Dimmen von %s", self._attr_name)
 
-    async def async_turn_off(self, **kwargs):
+    async def async_turn_off(self, **kwargs) -> None:
+        """Turn the light off."""
         if self._brightness_pct >= MIN_PERCENT:
             self._last_brightness_pct = self._brightness_pct
 
@@ -89,27 +102,20 @@ class WibutlerLight(LightEntity):
         url = f"devices/{self._device_id}/components/SWT"
 
         response = await self._hub._request("PATCH", url, data)
-
         if response:
-            _LOGGER.info("💡 Light %s ausgeschaltet (letzte Helligkeit %d %%)",
-                         self._attr_name, self._last_brightness_pct)
             self._is_on = False
             self._brightness_pct = 0
             self.async_write_ha_state()
-        else:
-            _LOGGER.error("❌ Fehler beim Ausschalten von %s", self._attr_name)
 
-    # --- Initialer & WS-Status ---
-    def _fetch_state(self, components):
+    def _fetch_state(self, components) -> None:
+        """Update state from device data."""
         for component in components:
-            if component.get("name") == "STATE":
-                value = component.get("value")
-                self._is_on = value != "0"
-
-            if component.get("name") == "BRI_LVL":
-                value = component.get("value")
+            name = component.get("name")
+            if name == "STATE":
+                self._is_on = component.get("value") != "0"
+            elif name == "BRI_LVL":
                 try:
-                    pct = int(value)
+                    pct = int(component.get("value"))
                     if pct < MIN_PERCENT:
                         self._brightness_pct = 0
                         self._is_on = False
@@ -119,17 +125,9 @@ class WibutlerLight(LightEntity):
                 except (TypeError, ValueError):
                     self._brightness_pct = 0
                     self._is_on = False
-
-            if component.get("name") == "SWT":
+            elif name == "SWT":
                 value = component.get("value")
                 if value in ("0", "OFF"):
                     self._is_on = False
                 elif self._brightness_pct >= MIN_PERCENT:
                     self._is_on = True
-
-    async def async_added_to_hass(self):
-        self._hub.register_listener(self)
-
-    def handle_ws_update(self, device_id, components):
-        self._fetch_state(components)
-        self.async_write_ha_state()

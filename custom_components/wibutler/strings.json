@@ -1,0 +1,61 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Wibutler Hub",
+                "data": {
+                    "host": "Host",
+                    "port": "Port",
+                    "username": "Username",
+                    "password": "Password",
+                    "verify_ssl": "Verify SSL",
+                    "use_ssl": "Use SSL"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Cannot connect to Wibutler hub",
+            "invalid_auth": "Invalid authentication",
+            "unknown": "Unknown error"
+        },
+        "abort": {
+            "already_configured": "Device is already configured"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Wibutler Options",
+                "data": {
+                    "next_step": "Section"
+                }
+            },
+            "connection": {
+                "title": "Connection Settings",
+                "data": {
+                    "host": "Host",
+                    "port": "Port",
+                    "username": "Username",
+                    "password": "Password",
+                    "verify_ssl": "Verify SSL",
+                    "use_ssl": "Use SSL"
+                }
+            },
+            "rocker_menu": {
+                "title": "Rocker Bindings",
+                "data": {
+                    "dim_duration": "Dim duration (seconds, 0-100%)",
+                    "action": "Select action"
+                }
+            },
+            "add_binding": {
+                "title": "Add Rocker Binding",
+                "data": {
+                    "device_button": "Button",
+                    "target_entity_ids": "Target Entities",
+                    "mode": "Mode"
+                }
+            }
+        }
+    }
+}

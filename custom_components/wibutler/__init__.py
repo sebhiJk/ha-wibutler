@@ -1,24 +1,49 @@
-import asyncio
+"""Wibutler integration for Home Assistant."""
+
 import logging
-from typing import Any, Dict, Optional
-from homeassistant.core import HomeAssistant
+
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.helpers.typing import ConfigType
-from .const import DOMAIN, PLATFORMS  # Hier wird DOMAIN aus const.py importiert
+from homeassistant.core import HomeAssistant
+
 from .api import WibutlerHub
+from .const import PLATFORMS
+from .rocker import RockerController
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Setze die Konfigurationsdatei ein (configuration.yaml)."""
-    _LOGGER.debug("🔄 async_setup() in __init__.py wurde aufgerufen!")
-    hass.data.setdefault(DOMAIN, {})
-    return True
+type WibutlerConfigEntry = ConfigEntry[WibutlerHub]
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Setze die Konfiguration über die UI ein."""
-    _LOGGER.debug("🚀 async_setup_entry() wurde aufgerufen! Registriere Plattformen...")
+ROCKER_CONTROLLER_KEY = "rocker_controller"
 
+
+def _setup_rocker_controller(
+    hass: HomeAssistant, entry: WibutlerConfigEntry
+) -> None:
+    """Create and start rocker controller if bindings exist."""
+    options = entry.options or {}
+    bindings = options.get("rocker_bindings", [])
+
+    old_controller = getattr(entry, "rocker_controller", None)
+    if old_controller:
+        old_controller.stop()
+        entry.rocker_controller = None
+
+    if bindings:
+        dim_duration = options.get("dim_duration", 5.0)
+        controller = RockerController(hass, bindings, dim_duration=dim_duration)
+        controller.start()
+        entry.rocker_controller = controller
+
+
+async def _async_options_updated(
+    hass: HomeAssistant, entry: WibutlerConfigEntry
+) -> None:
+    """Handle options update - recreate rocker controller."""
+    _setup_rocker_controller(hass, entry)
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: WibutlerConfigEntry) -> bool:
+    """Set up Wibutler from a config entry."""
     hub = WibutlerHub(
         hass,
         entry.data["host"],
@@ -30,27 +55,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     if not await hub.authenticate():
-        _LOGGER.error("❌ Authentifizierung fehlgeschlagen!")
+        _LOGGER.error("Authentication failed")
         return False
 
-    hass.data[DOMAIN]["hub"] = hub
-
-    _LOGGER.debug("📝 API Response (Authentifizierung): %s", hub.token)
-
     hub.devices = await hub.get_devices()
+    entry.runtime_data = hub
 
-    hass.async_create_task(
-        hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    entry.async_create_background_task(
+        hass, hub.connect_websocket(), "wibutler_websocket"
     )
-    _LOGGER.debug("✅ Plattformen erfolgreich registriert!")
-    hass.loop.create_task(hub.connect_websocket())
+
+    _setup_rocker_controller(hass, entry)
+    entry.async_on_unload(
+        entry.add_update_listener(_async_options_updated)
+    )
 
     return True
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Entferne eine Konfiguration."""
-    _LOGGER.debug("🔄 async_unload_entry() wurde aufgerufen!")
+
+async def async_unload_entry(hass: HomeAssistant, entry: WibutlerConfigEntry) -> bool:
+    """Unload a config entry."""
+    controller = getattr(entry, "rocker_controller", None)
+    if controller:
+        controller.stop()
+        entry.rocker_controller = None
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
+        await entry.runtime_data.close()
     return unload_ok
