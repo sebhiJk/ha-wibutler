@@ -6,6 +6,7 @@ from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ColorMode,
     LightEntity,
+    LightEntityFeature,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -42,6 +43,7 @@ class WibutlerLight(WibutlerEntity, LightEntity):
 
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+    _attr_supported_features = LightEntityFeature(0)
 
     def __init__(self, hub, device) -> None:
         """Initialize the light."""
@@ -67,27 +69,30 @@ class WibutlerLight(WibutlerEntity, LightEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the light on."""
-        brightness_pct = self._last_brightness_pct
-
+        
+        # Prüfen, ob eine spezifische Helligkeit über den Slider gewählt wurde
         if ATTR_BRIGHTNESS in kwargs:
             brightness_ha = kwargs[ATTR_BRIGHTNESS]
             brightness_pct = max(
                 0, min(100, int(brightness_ha / BRIGHTNESS_SCALE))
             )
+        else:
+            # Wenn nur der "Ein"-Schalter gedrückt wurde, nehmen wir den letzten bekannten Wert
+            brightness_pct = self._last_brightness_pct
+            if brightness_pct < MIN_PERCENT:
+                brightness_pct = 100  # Fallback auf 100%, falls kein alter Wert vorlag
 
         if brightness_pct < MIN_PERCENT:
             await self.async_turn_off()
             return
 
-        data_swt = {"value": "ON", "type": "switch"}
-        url_swt = f"devices/{self._device_id}/components/SWT"
-        resp_swt = await self._hub._request("PATCH", url_swt, data_swt)
-
+        # Bei einem Dimmer schicken wir NUR noch den Helligkeitswert (BRI_LVL),
+        # um das kurze Aufblinken (durch einen vorausgehenden SWT=ON Befehl) zu verhindern.
         data_bri = {"type": "numeric", "value": str(brightness_pct)}
         url_bri = f"devices/{self._device_id}/components/BRI_LVL"
         resp_bri = await self._hub._request("PATCH", url_bri, data_bri)
 
-        if resp_swt and resp_bri:
+        if resp_bri:
             self._is_on = True
             self._brightness_pct = brightness_pct
             self._last_brightness_pct = brightness_pct
@@ -98,6 +103,7 @@ class WibutlerLight(WibutlerEntity, LightEntity):
         if self._brightness_pct >= MIN_PERCENT:
             self._last_brightness_pct = self._brightness_pct
 
+        # Beim Ausschalten reicht weiterhin der klassische Schalter-Befehl aus
         data = {"value": "OFF", "type": "switch"}
         url = f"devices/{self._device_id}/components/SWT"
 
@@ -131,3 +137,4 @@ class WibutlerLight(WibutlerEntity, LightEntity):
                     self._is_on = False
                 elif self._brightness_pct >= MIN_PERCENT:
                     self._is_on = True
+
