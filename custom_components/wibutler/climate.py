@@ -30,7 +30,8 @@ async def async_setup_entry(
 
     climate_entities = []
     for device_id, device in devices.items():
-        if device.get("type") in ["RoomOperatingPanels"]:
+        # VOCsensors hinzugefügt
+        if device.get("type") in ["RoomOperatingPanels", "VOCsensors"]:
             climate_entities.append(WibutlerClimate(hub, device))
 
     async_add_entities(climate_entities, True)
@@ -50,6 +51,7 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
         self._attr_unique_id = device["id"]
         self._current_temperature = None
         self._target_temperature = None
+        self._current_humidity = None  # Neu: Luftfeuchtigkeit
         self._fetch_state(device.get("components", []))
 
     @property
@@ -63,6 +65,11 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
         return self._target_temperature
 
     @property
+    def current_humidity(self):
+        """Return the current humidity."""
+        return self._current_humidity
+
+    @property
     def hvac_mode(self):
         """Return the current HVAC mode."""
         return HVACMode.HEAT
@@ -72,7 +79,12 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
         if "temperature" not in kwargs:
             return
 
-        new_temp = int((kwargs["temperature"] - 10) * 2)
+        # Skalierung abhängig vom Gerätetyp
+        if self._device.get("type") == "VOCsensors":
+            new_temp = int(kwargs["temperature"])
+        else:
+            new_temp = int((kwargs["temperature"] - 10) * 2)
+            
         data = {"type": "numeric", "value": str(new_temp)}
         url = f"devices/{self._device_id}/components/TSP"
         response = await self._hub._request("PATCH", url, data)
@@ -85,13 +97,25 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
         """Update state from device data."""
         for component in components:
             name = component.get("name")
-            if name == "TMP":
+            val = component.get("value")
+            
+            # RTMP und TMP abfangen
+            if name in ("TMP", "RTMP"):
                 try:
-                    self._current_temperature = int(component.get("value")) / 100
+                    self._current_temperature = int(val) / 100
                 except (TypeError, ValueError):
-                    self._current_temperature = None
+                    pass
             elif name == "TSP":
                 try:
-                    self._target_temperature = (int(component.get("value")) / 2) + 10
+                    # VOCsensors geben den Wert direkt aus (z.B. 26 für 26°C), Panels skaliert
+                    if self._device.get("type") == "VOCsensors":
+                        self._target_temperature = float(val)
+                    else:
+                        self._target_temperature = (int(val) / 2) + 10
                 except (TypeError, ValueError):
-                    self._target_temperature = None
+                    pass
+            elif name == "HUM":
+                try:
+                    self._current_humidity = int(val) / 100
+                except (TypeError, ValueError):
+                    pass
