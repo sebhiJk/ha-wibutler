@@ -2,13 +2,13 @@
 
 import logging
 import time
-
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_call_later
 
-from . import WibutlerConfigEntry
+from .const import DOMAIN
 from .const import EVENT_WIBUTLER_BUTTON
 from .entity import WibutlerEntity
 
@@ -26,11 +26,11 @@ BUTTON_MAPPING = {
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: WibutlerConfigEntry,
+    entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Wibutler binary sensors from a config entry."""
-    hub = entry.runtime_data
+    hub = hass.data[DOMAIN]["hub"]
     devices = hub.devices
 
     binary_sensors = []
