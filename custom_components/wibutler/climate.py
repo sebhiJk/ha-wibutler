@@ -7,11 +7,12 @@ from homeassistant.components.climate import (
     ClimateEntityFeature,
     HVACMode,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import WibutlerConfigEntry
+from .const import DOMAIN
 from .entity import WibutlerEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,11 +22,12 @@ PARALLEL_UPDATES = 1
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: WibutlerConfigEntry,
+    entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Wibutler climate devices from a config entry."""
-    hub = entry.runtime_data
+    # Hub klassisch laden - passend zu deiner __init__.py
+    hub = hass.data[DOMAIN]["hub"]
     devices = hub.devices
 
     climate_entities = []
@@ -39,25 +41,29 @@ async def async_setup_entry(
 class WibutlerClimate(WibutlerEntity, ClimateEntity):
     """Representation of a Wibutler Climate Device."""
 
-    # COOL Modus zur Auswahl hinzugefügt
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
 
     def __init__(self, hub, device) -> None:
         """Initialize the climate device."""
         super().__init__(hub, device)
+        
+        # Explizit setzen, damit API-Requests (PATCH) nicht abstürzen
+        self._hub = hub
+        self._device_id = device["id"]
+        
         self._attr_name = device["name"]
         self._attr_unique_id = device["id"]
+        
         self._current_temperature = None
         self._target_temperature = None
         self._hvac_mode = HVACMode.HEAT
-        self._saved_target_temp = 22.0  # Speicher für den letzten Heiz-Sollwert
+        self._saved_target_temp = 22.0
         self._fetch_state(device.get("components", []))
 
     @property
     def supported_features(self):
         """Return the list of supported features."""
-        # Im Kühlmodus verstecken wir die Temperaturregelung in der UI komplett
         if self._hvac_mode == HVACMode.COOL:
             return ClimateEntityFeature(0)
         return ClimateEntityFeature.TARGET_TEMPERATURE
@@ -70,7 +76,6 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
     @property
     def target_temperature(self):
         """Return the target temperature."""
-        # Wenn gekühlt wird, manipulieren wir die Anzeige starr auf 22.5°C
         if self._hvac_mode == HVACMode.COOL:
             return 22.5
         return self._target_temperature
@@ -86,8 +91,7 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
             return
 
         if hvac_mode == HVACMode.COOL:
-            # Wibutler auf 30°C zwingen, damit Stellventile voll auffahren
-            new_temp = int((30 - 10) * 2)  # Ergibt API-Wert 40
+            new_temp = int((30 - 10) * 2)
             data = {"type": "numeric", "value": str(new_temp)}
             url = f"devices/{self._device_id}/components/TSP"
             response = await self._hub._request("PATCH", url, data)
@@ -96,7 +100,6 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
                 self.async_write_ha_state()
 
         elif hvac_mode == HVACMode.HEAT:
-            # Letzten bekannten Heiz-Sollwert wiederherstellen
             target = self._saved_target_temp if self._saved_target_temp else 22.0
             new_temp = int((target - 10) * 2)
             data = {"type": "numeric", "value": str(new_temp)}
@@ -113,7 +116,6 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set the target temperature."""
-        # Im Kühlmodus blockieren wir manuelle Änderungen über Service-Calls komplett
         if self._hvac_mode == HVACMode.COOL:
             return
 
@@ -143,8 +145,7 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
                 try:
                     val = (int(component.get("value")) / 2) + 10
                     
-                    # Wenn Wibutler auf 30°C steht, sind wir aktiv im Kühlmodus
-                    if val == 30.0:
+                    if val >= 30.0:
                         self._hvac_mode = HVACMode.COOL
                     elif self._hvac_mode != HVACMode.OFF:
                         self._hvac_mode = HVACMode.HEAT
@@ -155,4 +156,3 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
                         self._saved_target_temp = val
                 except (TypeError, ValueError):
                     self._target_temperature = None
-    
