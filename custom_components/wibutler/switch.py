@@ -3,11 +3,10 @@
 import logging
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from . import WibutlerConfigEntry
 from .entity import WibutlerEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -17,11 +16,11 @@ PARALLEL_UPDATES = 1
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: WibutlerConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Wibutler switches from a config entry."""
-    hub = hass.data[DOMAIN]["hub"]
+    hub = entry.runtime_data
     devices = hub.devices
 
     switches = []
