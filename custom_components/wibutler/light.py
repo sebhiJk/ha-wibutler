@@ -8,10 +8,11 @@ from homeassistant.components.light import (
     LightEntity,
     LightEntityFeature,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import WibutlerConfigEntry
+from .const import DOMAIN
 from .entity import WibutlerEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,11 +24,11 @@ MIN_PERCENT = 10
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: WibutlerConfigEntry,
+    entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Wibutler dimmable lights from a config entry."""
-    hub = entry.runtime_data
+    hub = hass.data[DOMAIN]["hub"]
     devices = hub.devices
 
     lights = []
