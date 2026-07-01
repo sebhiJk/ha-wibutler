@@ -26,13 +26,12 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Wibutler climate devices from a config entry."""
-    # Hub klassisch laden - passend zu deiner __init__.py
     hub = hass.data[DOMAIN]["hub"]
     devices = hub.devices
 
     climate_entities = []
     for device_id, device in devices.items():
-        if device.get("type") in ["RoomOperatingPanels"]:
+        if device.get("type") in ["RoomOperatingPanels", "VOCsensors"]:
             climate_entities.append(WibutlerClimate(hub, device))
 
     async_add_entities(climate_entities, True)
@@ -48,15 +47,14 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
         """Initialize the climate device."""
         super().__init__(hub, device)
         
-        # Explizit setzen, damit API-Requests (PATCH) nicht abstürzen
         self._hub = hub
         self._device_id = device["id"]
-        
         self._attr_name = device["name"]
         self._attr_unique_id = device["id"]
         
         self._current_temperature = None
         self._target_temperature = None
+        self._current_humidity = None
         self._hvac_mode = HVACMode.HEAT
         self._saved_target_temp = 22.0
         self._fetch_state(device.get("components", []))
@@ -79,6 +77,11 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
         if self._hvac_mode == HVACMode.COOL:
             return 22.5
         return self._target_temperature
+
+    @property
+    def current_humidity(self):
+        """Return the current humidity."""
+        return self._current_humidity
 
     @property
     def hvac_mode(self):
@@ -136,23 +139,30 @@ class WibutlerClimate(WibutlerEntity, ClimateEntity):
         """Update state from device data."""
         for component in components:
             name = component.get("name")
-            if name == "TMP":
+            val = component.get("value")
+            
+            if name in ("TMP", "RTMP"):
                 try:
-                    self._current_temperature = int(component.get("value")) / 100
+                    self._current_temperature = int(val) / 100
                 except (TypeError, ValueError):
-                    self._current_temperature = None
+                    pass
             elif name == "TSP":
                 try:
-                    val = (int(component.get("value")) / 2) + 10
+                    temp_val = (int(val) / 2) + 10
                     
-                    if val >= 30.0:
+                    if temp_val >= 30.0:
                         self._hvac_mode = HVACMode.COOL
                     elif self._hvac_mode != HVACMode.OFF:
                         self._hvac_mode = HVACMode.HEAT
-                        self._target_temperature = val
-                        self._saved_target_temp = val
+                        self._target_temperature = temp_val
+                        self._saved_target_temp = temp_val
                     else:
-                        self._target_temperature = val
-                        self._saved_target_temp = val
+                        self._target_temperature = temp_val
+                        self._saved_target_temp = temp_val
                 except (TypeError, ValueError):
-                    self._target_temperature = None
+                    pass
+            elif name == "HUM":
+                try:
+                    self._current_humidity = int(val) / 100
+                except (TypeError, ValueError):
+                    pass
